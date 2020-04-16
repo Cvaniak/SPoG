@@ -113,11 +113,27 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint16_t data_in[2];
   while (1)
   {
     /* USER CODE END WHILE */
+    MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
+	volatile HAL_StatusTypeDef result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
+	if (result == HAL_OK) {
+		volatile int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
+		volatile int16_t data_short = (int16_t) data_in[0];
+		volatile uint32_t counter = 10;
+//		while(counter -- );
+	    if(data_full>=200000){
+	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
+	    }
+	    else{
+	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+
+	    }
+	}
   }
   /* USER CODE END 3 */
 }
