@@ -28,7 +28,6 @@
 #include "usart.h"
 #include "usb_host.h"
 #include "gpio.h"
-#include "pdm_filter.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -42,6 +41,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,7 +60,11 @@ void SystemClock_Config(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
-
+void swi(int Flag_er, int Flag_work, int Flag_wait){
+	HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin , Flag_er);
+	HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin , Flag_work);
+	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin , Flag_wait);
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -106,7 +110,9 @@ int main(void)
   MX_USART1_Init();
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
-
+  int Flag_er = 0;
+  int Flag_work = 0;
+  int Flag_wait = 0;
   /* USER CODE END 2 */
  
  
@@ -118,6 +124,25 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  for(int i = 0; i <3; ++i){
+		  if(i == 0){
+			  Flag_er =1;
+			  Flag_work = 0;
+			  Flag_wait = 0;
+		  };
+		  if(i == 1){
+			  Flag_er = 0;
+			  Flag_work = 1;
+			  Flag_wait = 0;
+		  };
+		  if(i == 1){
+			  Flag_er = 0;
+			  Flag_work = 0;
+			  Flag_wait = 1;
+		  };
+		  delay_ms(100);
+	  }
+	  swi(Flag_er,Flag_work,Flag_wait);
   }
   /* USER CODE END 3 */
 }
