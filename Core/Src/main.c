@@ -28,7 +28,6 @@
 #include "usart.h"
 #include "usb_host.h"
 #include "gpio.h"
-#include "pdm_filter.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -65,7 +64,44 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+__uint8_t UserPressButton = 0;
 
+/* Wave Player Pause/Resume Status. Defined as external in waveplayer.c file */
+__uint32_t PauseResumeStatus = IDLE_STATUS;
+
+/* Counter for User button presses */
+__uint32_t PressCount = 0;
+
+#define AUDIO_BUFFER_SIZE   8192
+#define WR_BUFFER_SIZE      0x7000
+
+typedef struct {
+  int32_t offset;
+  uint32_t fptr;
+}Audio_BufferTypeDef;
+
+typedef enum
+{
+  BUFFER_OFFSET_NONE = 0,
+  BUFFER_OFFSET_HALF,
+  BUFFER_OFFSET_FULL,
+}BUFFER_StateTypeDef;
+
+
+Audio_BufferTypeDef  BufferCtl;
+
+uint8_t  pHeaderBuff[44];
+uint16_t WrBuffer[WR_BUFFER_SIZE];
+
+static uint16_t RecBuf[2*PCM_OUT_SIZE];
+static uint16_t InternalBuffer[INTERNAL_BUFF_SIZE];
+
+__IO uint32_t AUDIODataReady = 0, AUDIOBuffOffset = 0;
+__IO uint32_t ITCounter = 0;
+__IO uint8_t volume = 70;
+ uint32_t AudioTotalSize; /* This variable holds the total size of the audio file */
+uint32_t AudioRemSize;   /* This variable holds the remaining data in audio file */
+uint16_t *CurrentPos;   /* This variable holds the current position of audio pointer */
 /* USER CODE END 0 */
 
 /**
@@ -77,7 +113,6 @@ int main(void)
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
-  
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -108,32 +143,194 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
- 
- 
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint16_t data_in[2];
+  if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, 70, DEFAULT_AUDIO_IN_FREQ) != 0)
+  {
+	  BSP_LED_On(LED5);
+	  my_wait(100);
+  }
+  BSP_LED_Off(LED3);
+  BSP_LED_Off(LED4);
+  BSP_LED_Off(LED5);
+  BSP_LED_Off(LED6);
+  BufferCtl.offset = BUFFER_OFFSET_NONE;
+  BufferCtl.fptr = 0;
+
+  Led_Flash(0);
+  printf("\n\nAUDIO LOOPBACK EXAMPLE START:\n");
+  if(BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR) != AUDIO_OK)
+  {
+	  Led_Flash(2);
+  }
+
+  printf("AUDIO loop from digital micro (U20 & U21 components on board) to headphone (CN10 jack connector)\n");
+
+
+  Led_Flash(0);
+
+  /* Start Recording */
+  if (BSP_AUDIO_IN_Record((uint16_t*)&InternalBuffer[0], INTERNAL_BUFF_SIZE) != AUDIO_OK)
+  {
+    /* Record Error */
+	  Led_Flash(2);
+  }
+
+
+  AUDIODataReady = 0;
+
+  while (AUDIODataReady != 2)
+  {
+    if(BufferCtl.offset == BUFFER_OFFSET_HALF)
+    {
+      /* PDM to PCM data convert */
+    	Led_Flash(3);
+    	Led_Flash(3);
+      BSP_AUDIO_IN_PDMToPCM((uint16_t*)&InternalBuffer[0], (uint16_t*)&RecBuf[0]);
+
+      /* Copy PCM data in internal buffer */
+      memcpy((uint16_t*)&WrBuffer[ITCounter * (PCM_OUT_SIZE*2)], RecBuf, PCM_OUT_SIZE*4);
+
+      BufferCtl.offset = BUFFER_OFFSET_NONE;
+
+      if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*4))-1)
+      {
+        AUDIODataReady = 1;
+        AUDIOBuffOffset = 0;
+        ITCounter++;
+      }
+      else if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*2))-1)
+      {
+        AUDIODataReady = 2;
+        AUDIOBuffOffset = WR_BUFFER_SIZE/2;
+        ITCounter = 0;
+      }
+      else
+      {
+        ITCounter++;
+      }
+
+    }
+
+    if(BufferCtl.offset == BUFFER_OFFSET_FULL)
+    {
+      /* PDM to PCM data convert */
+    	Led_Flash(3);
+    	Led_Flash(3);
+      BSP_AUDIO_IN_PDMToPCM((uint16_t*)&InternalBuffer[INTERNAL_BUFF_SIZE/2], (uint16_t*)&RecBuf[0]);
+
+      /* Copy PCM data in internal buffer */
+      memcpy((uint16_t*)&WrBuffer[ITCounter * (PCM_OUT_SIZE*2)], RecBuf, PCM_OUT_SIZE*4);
+
+      BufferCtl.offset = BUFFER_OFFSET_NONE;
+
+      if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*4))-1)
+      {
+        AUDIODataReady = 1;
+        AUDIOBuffOffset = 0;
+        ITCounter++;
+      }
+      else if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*2))-1)
+      {
+        AUDIODataReady = 2;
+        AUDIOBuffOffset = WR_BUFFER_SIZE/2;
+        ITCounter = 0;
+      }
+      else
+      {
+        ITCounter++;
+        AUDIODataReady = 2;
+      }
+    }
+  };
+
+
+  if (BSP_AUDIO_IN_Stop() != AUDIO_OK)
+  {
+    /* Record Error */
+	  BSP_LED_On(LED5);
+
+  }
+  else{
+	  Led_Flash(2);
+	  Led_Flash(2);
+	  Led_Flash(2);
+  }
+
+
+  Led_Flash(1);
+  my_wait(20);
+  if(BSP_ACCELERO_Init() != ACCELERO_OK)
+  {
+    /* Initialization Error */
+    Error_Handler();
+  }
+
+  /* MEMS Accelerometer configure to manage PAUSE, RESUME operations */
+  BSP_ACCELERO_Click_ITConfig();
+
+
+//
+  AudioTotalSize = INTERNAL_BUFF_SIZE;
+  /* Set the current audio pointer position */
+  CurrentPos = (uint16_t *)(&RecBuf[0]);
+//
+//  BSP_AUDIO_OUT_Play(CurrentPos, AudioTotalSize);
+
+  /* Start Playback */
+
+//  while (1) {
+//      /* Wait end of half block recording */
+//      while (audio_rec_buffer_state == BUFFER_OFFSET_HALF) {
+//      }
+//      audio_rec_buffer_state = BUFFER_OFFSET_NONE;
+//
+//      /* Copy recorded 1st half block */
+//      memcpy((uint16_t *)(AUDIO_BUFFER_OUT), (uint16_t *)(AUDIO_BUFFER_IN), AUDIO_BLOCK_SIZE);
+//
+//      /* Wait end of one block recording */
+//      while (audio_rec_buffer_state == BUFFER_OFFSET_FULL) {
+//      }
+//      audio_rec_buffer_state = BUFFER_OFFSET_NONE;
+//
+//      /* Copy recorded 2nd half block */
+//      memcpy((uint16_t *)(AUDIO_BUFFER_OUT + (AUDIO_BLOCK_SIZE)), (uint16_t *)(AUDIO_BUFFER_IN + (AUDIO_BLOCK_SIZE)), AUDIO_BLOCK_SIZE);
+//  }
+
+//    AudioPlay_Test();
   while (1)
   {
+//	  PressCount++;
+	  Toggle_Leds();
     /* USER CODE END WHILE */
-    MX_USB_HOST_Process();
+//    MX_USB_HOST_Process();
+
+//	  if(HAL_GPIO_ReadPin(BlueB_GPIO_Port, BlueB_Pin) == 1){
+//		  if (BSP_AUDIO_IN_Stop() != AUDIO_OK)
+//		  {
+//			/* Record Error */
+//		  }
+//		  Led_Flash(0);
+//		  Led_Flash(0);
+//		  Led_Flash(0);
+//	  }
 
     /* USER CODE BEGIN 3 */
-	volatile HAL_StatusTypeDef result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
-	if (result == HAL_OK) {
-		volatile int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
-		volatile int16_t data_short = (int16_t) data_in[0];
-		volatile uint32_t counter = 10;
-//		while(counter -- );
-	    if(data_full>=200000){
-	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
-	    }
-	    else{
-	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
-
-	    }
-	}
+//	volatile HAL_StatusTypeDef result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
+//	if (result == HAL_OK) {
+//		volatile int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
+//		volatile int16_t data_short = (int16_t) data_in[0];
+//		volatile uint32_t counter = 10;
+////		while(counter -- );
+//	    if(data_full>=200000){
+//	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
+//	    }
+//	    else{
+//	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+//
+//	    }
+//	}
   }
   /* USER CODE END 3 */
 }
@@ -191,6 +388,134 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+void my_wait(int k){
+	for(int j=0;j<k;j++)
+	  for(int i=0;i<80000;){i++;}
+
+}
+void Toggle_Leds(void)
+{
+  BSP_LED_Toggle(LED3);
+  my_wait(1);
+  BSP_LED_Toggle(LED4);
+  my_wait(1);
+  BSP_LED_Toggle(LED5);
+  my_wait(1);
+  BSP_LED_Toggle(LED6);
+  my_wait(1);
+}
+
+void Led_Flash(int i)
+{
+	if(i == 0){
+		  BSP_LED_Toggle(LED3);
+		  my_wait(3);
+		  BSP_LED_Toggle(LED3);
+	}
+	if(i == 1){
+		  BSP_LED_Toggle(LED4);
+		  my_wait(3);
+		  BSP_LED_Toggle(LED4);
+
+	}
+	if(i == 2){
+		  BSP_LED_Toggle(LED5);
+		  my_wait(3);
+		  BSP_LED_Toggle(LED5);
+
+	}
+	if(i == 3){
+		  BSP_LED_Toggle(LED6);
+		  my_wait(3);
+		  BSP_LED_Toggle(LED6);
+
+	}
+	  my_wait(3);
+}
+
+void BSP_AUDIO_IN_TransferComplete_CallBack(void)
+{
+  BufferCtl.offset = BUFFER_OFFSET_FULL;
+	Led_Flash(1);
+	Led_Flash(0);
+}
+
+/**
+  * @brief  Manages the DMA Half Transfer complete interrupt.
+  * @param  None
+  * @retval None
+  */
+void BSP_AUDIO_IN_HalfTransfer_CallBack(void)
+{
+  BufferCtl.offset = BUFFER_OFFSET_HALF;
+	Led_Flash(1);
+	Led_Flash(0);
+	Led_Flash(0);
+	Led_Flash(0);
+}
+
+/**
+  * @brief  Audio IN Error callback function
+  * @param  pData
+  * @retval None
+  */
+void BSP_AUDIO_IN_Error_Callback(void)
+{
+  /* Stop the program with an infinite loop */
+	Led_Flash(1);
+	Led_Flash(2);
+	Led_Flash(1);
+}
+
+
+void BSP_AUDIO_OUT_TransferComplete_CallBack()
+{
+  uint32_t replay = 0;
+
+	Led_Flash(3);
+	Led_Flash(3);
+	Led_Flash(3);
+	Led_Flash(3);
+	Led_Flash(3);
+//  if (AudioRemSize > 0)
+//  {
+//    /* Replay from the current position */
+//    BSP_AUDIO_OUT_ChangeBuffer((uint16_t*)CurrentPos, DMA_MAX(AudioRemSize/AUDIODATA_SIZE));
+//
+//    /* Update the current pointer position */
+//    CurrentPos += DMA_MAX(AudioRemSize);
+//
+//    /* Update the remaining number of data to be played */
+//    AudioRemSize -= AUDIODATA_SIZE * DMA_MAX(AudioRemSize/AUDIODATA_SIZE);
+//  }
+//  else
+//  {
+//    /* Request to replay audio file from beginning */
+//    replay = 1;
+//  }
+//
+//  /* Audio sample used for play */
+//  if((AudioTest == 0) && (replay == 1))
+//  {
+//    /* Replay from the beginning */
+//    /* Set the current audio pointer position */
+//    CurrentPos = (uint16_t *)(AUDIO_FILE_ADDRESS);
+//    /* Replay from the beginning */
+//    BSP_AUDIO_OUT_Play(CurrentPos, AudioTotalSize);
+//    /* Update the remaining number of data to be played */
+//    AudioRemSize = AudioTotalSize - AUDIODATA_SIZE * DMA_MAX(AudioTotalSize);
+//    /* Update the current audio pointer position */
+//    CurrentPos += DMA_MAX(AudioTotalSize);
+//  }
+//
+//  /* Audio sample saved during record */
+//  if((AudioTest == 1) && (replay == 1))
+//  {
+//    /* Replay from the beginning */
+//    BSP_AUDIO_OUT_Play(WrBuffer, AudioTotalSize);
+//  }
+}
+
 /* USER CODE END 4 */
 
 /**
@@ -201,7 +526,16 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-
+	  BSP_LED_On(LED5);
+	  for(int i=0;i<80000;){i++;}
+	  for(int i=0;i<80000;){i++;}
+	  for(int i=0;i<80000;){i++;}
+	  for(int i=0;i<80000;){i++;}
+	  for(int i=0;i<80000;){i++;}
+	  for(int i=0;i<80000;){i++;}
+//	  while(1)
+//	  {
+//	  }
   /* USER CODE END Error_Handler_Debug */
 }
 

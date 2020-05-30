@@ -33,6 +33,10 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "../Oth/stm32f411e_discovery.h"
+#include "../Oth/stm32f411e_discovery_audio.h"
+#include "../Oth/stm32f411e_discovery_gyroscope.h"
+#include "../Oth/stm32f411e_discovery_accelerometer.h"
 
 /* USER CODE END Includes */
 
@@ -79,6 +83,8 @@ void Error_Handler(void);
 #define OTG_FS_PowerSwitchOn_GPIO_Port GPIOC
 #define PDM_OUT_Pin GPIO_PIN_3
 #define PDM_OUT_GPIO_Port GPIOC
+#define BlueB_Pin GPIO_PIN_0
+#define BlueB_GPIO_Port GPIOA
 #define I2S3_WS_Pin GPIO_PIN_4
 #define I2S3_WS_GPIO_Port GPIOA
 #define SPI1_SCK_Pin GPIO_PIN_5
@@ -123,6 +129,16 @@ void Error_Handler(void);
 #define MEMS_INT2_GPIO_Port GPIOE
 /* USER CODE BEGIN Private defines */
 
+
+#define WR_BUFFER_SIZE           0x7000
+#define PAUSE_STATUS     ((uint32_t)0x00) /* Audio Player in Pause Status */
+#define RESUME_STATUS    ((uint32_t)0x01) /* Audio Player in Resume Status */
+#define IDLE_STATUS      ((uint32_t)0x02) /* Audio Player in Idle Status */
+
+void my_wait(int k);
+void Toggle_Leds(void);
+void Error_Handler(void);
+void Led_Flash(int i);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
