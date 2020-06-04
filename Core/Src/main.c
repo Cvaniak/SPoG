@@ -21,7 +21,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "crc.h"
-#include "dma.h"
 #include "i2c.h"
 #include "i2s.h"
 #include "pdm2pcm.h"
@@ -100,6 +99,7 @@ static uint16_t InternalBuffer[INTERNAL_BUFF_SIZE];
 __IO uint32_t AUDIODataReady = 0, AUDIOBuffOffset = 0;
 __IO uint32_t ITCounter = 0;
 __IO uint8_t volume = 70;
+volatile sum = 0;
  uint32_t AudioTotalSize; /* This variable holds the total size of the audio file */
 uint32_t AudioRemSize;   /* This variable holds the remaining data in audio file */
 uint16_t *CurrentPos;   /* This variable holds the current position of audio pointer */
@@ -133,7 +133,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_I2C1_Init();
   MX_I2S2_Init();
   MX_I2S3_Init();
@@ -168,11 +167,12 @@ int main(void)
   Led_Flash(0);
 
   /* Start Recording */
-  if (BSP_AUDIO_IN_Record((uint16_t*)&InternalBuffer[0], INTERNAL_BUFF_SIZE) != AUDIO_OK)
+  if (BSP_AUDIO_IN_Record((uint16_t*)&InternalBuffer[0], 64) != AUDIO_OK)
   {
     /* Record Error */
 	  Led_Flash(2);
   }
+  BSP_AUDIO_IN_SetVolume(75);
 
 
   AUDIODataReady = 0;
@@ -182,8 +182,8 @@ int main(void)
     if(BufferCtl.offset == BUFFER_OFFSET_HALF)
     {
       /* PDM to PCM data convert */
-    	Led_Flash(3);
-    	Led_Flash(3);
+//    	Led_Flash(3);
+//    	Led_Flash(3);
       BSP_AUDIO_IN_PDMToPCM((uint16_t*)&InternalBuffer[0], (uint16_t*)&RecBuf[0]);
 
       /* Copy PCM data in internal buffer */
@@ -191,54 +191,64 @@ int main(void)
 
       BufferCtl.offset = BUFFER_OFFSET_NONE;
 
-      if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*4))-1)
-      {
-        AUDIODataReady = 1;
-        AUDIOBuffOffset = 0;
+//      if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*4))-1)
+//      {
+//        AUDIODataReady = 1;
+//        AUDIOBuffOffset = 0;
+//        ITCounter++;
+//      }
+//      else if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*2))-1)
+//      {
+//        AUDIODataReady = 2;
+//        AUDIOBuffOffset = WR_BUFFER_SIZE/2;
+//        ITCounter = 0;
+//      }
+//      else
+//      {
         ITCounter++;
-      }
-      else if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*2))-1)
-      {
-        AUDIODataReady = 2;
-        AUDIOBuffOffset = WR_BUFFER_SIZE/2;
-        ITCounter = 0;
-      }
-      else
-      {
-        ITCounter++;
-      }
+//      }
 
     }
 
     if(BufferCtl.offset == BUFFER_OFFSET_FULL)
     {
       /* PDM to PCM data convert */
-    	Led_Flash(3);
-    	Led_Flash(3);
-      BSP_AUDIO_IN_PDMToPCM((uint16_t*)&InternalBuffer[INTERNAL_BUFF_SIZE/2], (uint16_t*)&RecBuf[0]);
+//    	Led_Flash(3);
+//    	Led_Flash(3);
+      BSP_AUDIO_IN_PDMToPCM((uint16_t*)&InternalBuffer[0], (uint16_t*)&RecBuf[0]);
 
       /* Copy PCM data in internal buffer */
       memcpy((uint16_t*)&WrBuffer[ITCounter * (PCM_OUT_SIZE*2)], RecBuf, PCM_OUT_SIZE*4);
 
       BufferCtl.offset = BUFFER_OFFSET_NONE;
+      if (BSP_AUDIO_IN_Record((uint16_t*)&InternalBuffer[0], 128) != AUDIO_OK)
+      {
+        /* Record Error */
+    	  Led_Flash(2);
+      }
+      else{
+//    	  Led_Flash(3);
 
-      if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*4))-1)
-      {
-        AUDIODataReady = 1;
-        AUDIOBuffOffset = 0;
-        ITCounter++;
       }
-      else if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*2))-1)
-      {
-        AUDIODataReady = 2;
-        AUDIOBuffOffset = WR_BUFFER_SIZE/2;
+
+//      if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*4))-1)
+//      {
+//        AUDIODataReady = 1;
+//        AUDIOBuffOffset = 0;
+//        ITCounter++;
+//      }
+//      else if(ITCounter == (WR_BUFFER_SIZE/(PCM_OUT_SIZE*2))-1)
+//      {
+//        AUDIODataReady = 2;
+//        AUDIOBuffOffset = WR_BUFFER_SIZE/2;
+//        ITCounter = 0;
+//      }
+//      else
+//      {
         ITCounter = 0;
-      }
-      else
-      {
-        ITCounter++;
-        AUDIODataReady = 2;
-      }
+//        AUDIODataReady = 2;
+//      }
+
     }
   };
 
@@ -428,8 +438,13 @@ void Led_Flash(int i)
 void BSP_AUDIO_IN_TransferComplete_CallBack(void)
 {
   BufferCtl.offset = BUFFER_OFFSET_FULL;
-	Led_Flash(1);
-	Led_Flash(0);
+ BSP_LED_Toggle(LED3);
+ sum = 0;
+ for(int i = 0; i<64;i++){
+	 sum += WrBuffer[i]/64.0;
+ }
+//	Led_Flash(1);
+//	Led_Flash(0);
 }
 
 /**
@@ -440,10 +455,11 @@ void BSP_AUDIO_IN_TransferComplete_CallBack(void)
 void BSP_AUDIO_IN_HalfTransfer_CallBack(void)
 {
   BufferCtl.offset = BUFFER_OFFSET_HALF;
-	Led_Flash(1);
-	Led_Flash(0);
-	Led_Flash(0);
-	Led_Flash(0);
+ BSP_LED_Toggle(LED6);
+//	Led_Flash(1);
+//	Led_Flash(0);
+//	Led_Flash(0);
+//	Led_Flash(0);
 }
 
 /**
