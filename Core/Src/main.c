@@ -20,7 +20,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "i2c.h"
 #include "i2s.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -63,6 +65,7 @@ volatile int32_t data_full;
 volatile int16_t data_short;
 volatile uint32_t counter;
 uint16_t data_in[2];
+uint16_t data_pcm[2];
 /* USER CODE END 0 */
 
 /**
@@ -94,6 +97,8 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2S2_Init();
+  MX_I2C1_Init();
+  MX_SPI1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
@@ -112,7 +117,8 @@ int main(void)
 		data_short = (int16_t) data_in[0];
 		counter = 10;
 //		while(counter -- );
-	    if(data_full>=200000){
+		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
+		if(data_full>=200000){
 	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
 	    }
 	    else{
