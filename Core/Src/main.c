@@ -25,7 +25,7 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
-
+#include "../Oth/stm32f411e_discovery_audio.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -49,6 +49,10 @@
 
 /* USER CODE BEGIN PV */
 
+float absFloat(float in) {
+	return in < 0 ? -in : in;
+}
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -59,13 +63,31 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-volatile HAL_StatusTypeDef result;
+static void PDMDecoder_Init();
+
 
 volatile int32_t data_full;
 volatile int16_t data_short;
 volatile uint32_t counter;
 uint16_t data_in[2];
 uint16_t data_pcm[2];
+PDM_Filter_Handler_t  PDM_FilterHandler[2];
+PDM_Filter_Config_t   PDM_FilterConfig[2];
+
+
+
+#define PDM_BUFFER_SIZE 1
+#define PCM_BUFFER_SIZE 2500
+#define PDM_BLOCK_SIZE_BITS 16
+#define LEAKY_KEEP_RATE 0.95
+
+volatile HAL_StatusTypeDef result;
+uint8_t i;
+uint16_t PDM_buffer[PDM_BUFFER_SIZE]; // Buffer for pdm value from hi2s2 (Mic)
+uint16_t PDM_value = 0;
+uint8_t PCM_value = 0;    // For keeping pcm value calculated from pdm_value
+float leaky_PCM_buffer = 0.0;    // Fast Estimation of moving average of PDM
+float leaky_AMP_buffer = 0.0; // Fast Estimation of moving average of abs(PCM)
 /* USER CODE END 0 */
 
 /**
@@ -75,7 +97,6 @@ uint16_t data_pcm[2];
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -106,26 +127,68 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+//	BSP_AUDIO_IN_Init(44000, 16, 1);
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	 result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
-	if (result == HAL_OK) {
-		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
-		data_short = (int16_t) data_in[0];
-		counter = 10;
-//		while(counter -- );
-		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
-		if(data_full>=200000){
-	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
-	    }
-	    else{
-	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+//	result = HAL_I2S_Receive(&hi2s2, PDM_buffer, PDM_BUFFER_SIZE, 1000);
+//	if (result == HAL_OK) {
+////		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
+////		data_short = (int16_t) data_in[0];
+////		counter = 10;
+//////		while(counter -- );
+////		  uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
+////		  uint32_t index = 0;
+//
+//		  /* PDM Demux */
+//		for (i = 0; i < PDM_BUFFER_SIZE; i++) {
+//			PCM_value = -PDM_BLOCK_SIZE_BITS / 2;
+//			PDM_value = PDM_buffer[i];
+//			// calculate PCM value
+//			while (PDM_value != 0)    // while pdm_value still have 1s in binary
+//			{
+//				PCM_value++;
+//				PDM_value ^= PDM_value & -PDM_value; // remove left most 1 in binary
+//			}
+//			leaky_PCM_buffer += PCM_value;
+//			leaky_PCM_buffer *= LEAKY_KEEP_RATE;
+//			leaky_AMP_buffer += absFloat(leaky_PCM_buffer);
+//			leaky_AMP_buffer *= LEAKY_KEEP_RATE;
+//		}
+//
+//		if(data_full>=200000){
+//	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
+//	    }
+//	    else{
+//	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+//
+//	    }
+//	}
+	  	result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
+	  	if (result == HAL_OK) {
+	  //		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
+	  //		data_short = (int16_t) data_in[0];
+	  //		counter = 10;
+	  ////		while(counter -- );
+	  //		  uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
+	  //		  uint32_t index = 0;
 
-	    }
-	}
+	  		  /* PDM Demux */
+	  		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
+
+	  		if(data_full>=200000){
+	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
+	  	    }
+	  	    else{
+	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+
+	  	    }
+	  	}
+
+
   }
   /* USER CODE END 3 */
 }
@@ -184,6 +247,30 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+static void PDMDecoder_Init()
+{
+  uint32_t index = 0;
+
+  /* Enable CRC peripheral to unlock the PDM library */
+  __HAL_RCC_CRC_CLK_ENABLE();
+
+  for(index = 0; index < 1; index++)
+  {
+    /* Init PDM filters */
+    PDM_FilterHandler[index].bit_order  = PDM_FILTER_BIT_ORDER_LSB;
+    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_LE;
+    PDM_FilterHandler[index].high_pass_tap = 2122358088;
+    PDM_FilterHandler[index].out_ptr_channels = 1;
+    PDM_FilterHandler[index].in_ptr_channels  = 1;
+    PDM_Filter_Init((PDM_Filter_Handler_t *)(&PDM_FilterHandler[index]));
+
+    /* PDM lib config phase */
+    PDM_FilterConfig[index].output_samples_number = 440000/1000;
+    PDM_FilterConfig[index].mic_gain = 24;
+    PDM_FilterConfig[index].decimation_factor = PDM_FILTER_DEC_FACTOR_64;
+    PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
+  }
+}
 /* USER CODE END 4 */
 
 /**
