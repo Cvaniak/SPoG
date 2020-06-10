@@ -20,15 +20,18 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "i2c.h"
 #include "i2s.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-#include "../Oth/stm32f411e_discovery_audio.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "../Oth/stm32f411e_discovery.h"
+#include "../Oth/stm32f411e_discovery_audio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,17 +66,16 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void PDMDecoder_Init();
-
 
 volatile int32_t data_full;
 volatile int16_t data_short;
 volatile uint32_t counter;
-uint16_t data_in[2];
-uint16_t data_pcm[2];
-PDM_Filter_Handler_t  PDM_FilterHandler[2];
-PDM_Filter_Config_t   PDM_FilterConfig[2];
-
+uint16_t data_in[128];
+uint16_t ends;
+uint16_t data_pcm[128];
+uint16_t a;
+uint16_t b;
+uint16_t c;
 
 
 #define PDM_BUFFER_SIZE 1
@@ -82,7 +84,7 @@ PDM_Filter_Config_t   PDM_FilterConfig[2];
 #define LEAKY_KEEP_RATE 0.95
 
 volatile HAL_StatusTypeDef result;
-uint8_t i;
+uint8_t toPDM;
 uint16_t PDM_buffer[PDM_BUFFER_SIZE]; // Buffer for pdm value from hi2s2 (Mic)
 uint16_t PDM_value = 0;
 uint8_t PCM_value = 0;    // For keeping pcm value calculated from pdm_value
@@ -117,9 +119,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2S2_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
+  MX_TIM3_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
@@ -127,8 +131,17 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-//	BSP_AUDIO_IN_Init(44000, 16, 1);
+  BSP_LED_Off(LED3);
+  BSP_LED_Off(LED4);
+  BSP_LED_Off(LED5);
+  BSP_LED_Off(LED6);
+  HAL_Delay(2000);
+  BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
 
+  BSP_AUDIO_IN_Record(data_in, INTERNAL_BUFF_SIZE/2);
+  BSP_AUDIO_IN_SetVolume(64);
+  toPDM = 0;
+  ends = 0;
   while (1)
   {
     /* USER CODE END WHILE */
@@ -167,26 +180,36 @@ int main(void)
 //
 //	    }
 //	}
-	  	result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
-	  	if (result == HAL_OK) {
-	  //		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
-	  //		data_short = (int16_t) data_in[0];
-	  //		counter = 10;
-	  ////		while(counter -- );
-	  //		  uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
-	  //		  uint32_t index = 0;
+	  	if(toPDM){
+	  		toPDM = 0;
 
-	  		  /* PDM Demux */
 	  		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
-
-	  		if(data_full>=200000){
-	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
-	  	    }
-	  	    else{
-	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
-
-	  	    }
+	  		ends = 0;
 	  	}
+	  	if(ends<32){
+	  		a = data_pcm[ends];
+	  	}
+//	  	result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
+//	  	if (result == HAL_OK) {
+//	  //		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
+//	  //		data_short = (int16_t) data_in[0];
+//	  //		counter = 10;
+//	  ////		while(counter -- );
+//	  //		  uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
+//	  //		  uint32_t index = 0;
+//
+//	  		  /* PDM Demux */
+//	  		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
+//
+//	  		if(data_full>=200000){
+//	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
+//	  	    }
+//	  	    else{
+//	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+//
+//	  	    }
+//	  	}
+		ends++;
 
 
   }
@@ -203,21 +226,22 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
+  /** Macro to configure the PLL multiplication factor 
+  */
+  __HAL_RCC_PLL_PLLM_CONFIG(8);
+  /** Macro to configure the PLL clock source 
+  */
+  __HAL_RCC_PLL_PLLSOURCE_CONFIG(RCC_PLLSOURCE_HSE);
   /** Configure the main internal regulator output voltage 
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 50;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
-  RCC_OscInitStruct.PLL.PLLQ = 7;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -226,7 +250,7 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
@@ -237,8 +261,8 @@ void SystemClock_Config(void)
   }
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S;
   PeriphClkInitStruct.PLLI2S.PLLI2SN = 192;
-  PeriphClkInitStruct.PLLI2S.PLLI2SM = 8;
-  PeriphClkInitStruct.PLLI2S.PLLI2SR = 2;
+  PeriphClkInitStruct.PLLI2S.PLLI2SM = 5;
+  PeriphClkInitStruct.PLLI2S.PLLI2SR = 5;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -246,30 +270,14 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void BSP_AUDIO_IN_HalfTransfer_CallBack(){
+	BSP_LED_Toggle(LED3);
 
-static void PDMDecoder_Init()
-{
-  uint32_t index = 0;
 
-  /* Enable CRC peripheral to unlock the PDM library */
-  __HAL_RCC_CRC_CLK_ENABLE();
-
-  for(index = 0; index < 1; index++)
-  {
-    /* Init PDM filters */
-    PDM_FilterHandler[index].bit_order  = PDM_FILTER_BIT_ORDER_LSB;
-    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_LE;
-    PDM_FilterHandler[index].high_pass_tap = 2122358088;
-    PDM_FilterHandler[index].out_ptr_channels = 1;
-    PDM_FilterHandler[index].in_ptr_channels  = 1;
-    PDM_Filter_Init((PDM_Filter_Handler_t *)(&PDM_FilterHandler[index]));
-
-    /* PDM lib config phase */
-    PDM_FilterConfig[index].output_samples_number = 440000/1000;
-    PDM_FilterConfig[index].mic_gain = 24;
-    PDM_FilterConfig[index].decimation_factor = PDM_FILTER_DEC_FACTOR_64;
-    PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
-  }
+}
+void BSP_AUDIO_IN_TransferComplete_CallBack(){
+	BSP_LED_Toggle(LED4);
+	toPDM = 1;
 }
 /* USER CODE END 4 */
 

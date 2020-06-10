@@ -850,7 +850,7 @@ uint8_t BSP_AUDIO_IN_PDMToPCM(uint16_t *PDMBuf, uint16_t *PCMBuf)
   {
     /* PDM to PCM filter */
 	PDM_Filter((uint8_t*)&AppPDM[index], (uint16_t*)&(PCMBuf[index]), &PDM_FilterHandler[index]);
-//    PDM_Filter((uint8_t*)&AppPDM[index], (uint16_t*)&(PCMBuf[index]), &PDM_FilterHandler[index]);
+//    PDM_Filter((uint8_t*)&AppPDM[index], (uint16_t*)&(Buf[index]), &PDM_FilterHandler[index]);
   }
   
   /* Duplicate samples since a single microphone in mounted on STM32F4-Discovery */
@@ -905,9 +905,9 @@ __weak void BSP_AUDIO_IN_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq
     /* PLLI2S_VCO Output = PLLI2S_VCO Input * PLLI2SN = 192 Mhz */
     /* I2SCLK = PLLI2S_VCO Output/PLLI2SR = 192/6 = 32 Mhz */
     rccclkinit.PeriphClockSelection = RCC_PERIPHCLK_I2S;
-    rccclkinit.PLLI2S.PLLI2SM = 8;
+    rccclkinit.PLLI2S.PLLI2SM = 5;
     rccclkinit.PLLI2S.PLLI2SN = 192;
-    rccclkinit.PLLI2S.PLLI2SR = 6;
+    rccclkinit.PLLI2S.PLLI2SR = 5;
     HAL_RCCEx_PeriphCLKConfig(&rccclkinit);
   }
   else
@@ -1073,16 +1073,30 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
   for(index = 0; index < ChnlNbrIn; index++)
   {
     /* Init PDM filters */
+//	    PDM_FilterHandler[index].bit_order  = PDM_FILTER_BIT_ORDER_LSB;
+//	    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_LE;
+//	    PDM_FilterHandler[index].high_pass_tap = 2122358088;
+//	    PDM_FilterHandler[index].out_ptr_channels = ChnlNbrOut;
+//	    PDM_FilterHandler[index].in_ptr_channels  = ChnlNbrIn;
+//	    PDM_Filter_Init((PDM_Filter_Handler_t *)(&PDM_FilterHandler[index]));
+//
+//	    /* PDM lib config phase */
+//	    PDM_FilterConfig[index].output_samples_number = AudioFreq/1000;
+//	    PDM_FilterConfig[index].mic_gain = 24;
+//	    PDM_FilterConfig[index].decimation_factor = PDM_FILTER_DEC_FACTOR_64;
+//	    PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
+//
     PDM_FilterHandler[index].bit_order  = PDM_FILTER_BIT_ORDER_LSB;
-    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_LE;
-    PDM_FilterHandler[index].high_pass_tap = 2122358088;
+    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_BE;
+    PDM_FilterHandler[index].high_pass_tap = 2104533974;
+//    PDM_FilterHandler[index].
     PDM_FilterHandler[index].out_ptr_channels = ChnlNbrOut;
     PDM_FilterHandler[index].in_ptr_channels  = ChnlNbrIn;
     PDM_Filter_Init((PDM_Filter_Handler_t *)(&PDM_FilterHandler[index]));
 
     /* PDM lib config phase */
     PDM_FilterConfig[index].output_samples_number = AudioFreq/1000;
-    PDM_FilterConfig[index].mic_gain = 24;
+    PDM_FilterConfig[index].mic_gain = 8;
     PDM_FilterConfig[index].decimation_factor = PDM_FILTER_DEC_FACTOR_64;
     PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
   }
