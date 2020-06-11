@@ -1087,8 +1087,8 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
 //	    PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
 //
     PDM_FilterHandler[index].bit_order  = PDM_FILTER_BIT_ORDER_LSB;
-    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_BE;
-    PDM_FilterHandler[index].high_pass_tap = 2104533974;
+    PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_LE;
+    PDM_FilterHandler[index].high_pass_tap = 2122358088;
 //    PDM_FilterHandler[index].
     PDM_FilterHandler[index].out_ptr_channels = ChnlNbrOut;
     PDM_FilterHandler[index].in_ptr_channels  = ChnlNbrIn;
@@ -1096,7 +1096,7 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
 
     /* PDM lib config phase */
     PDM_FilterConfig[index].output_samples_number = AudioFreq/1000;
-    PDM_FilterConfig[index].mic_gain = 8;
+    PDM_FilterConfig[index].mic_gain = 24;
     PDM_FilterConfig[index].decimation_factor = PDM_FILTER_DEC_FACTOR_64;
     PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
   }

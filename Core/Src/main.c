@@ -32,6 +32,8 @@
 /* USER CODE BEGIN Includes */
 #include "../Oth/stm32f411e_discovery.h"
 #include "../Oth/stm32f411e_discovery_audio.h"
+#include "complex.h"
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,16 +68,19 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define MAX 256
 
 volatile int32_t data_full;
 volatile int16_t data_short;
 volatile uint32_t counter;
 uint16_t data_in[128];
-uint16_t ends;
-uint16_t data_pcm[128];
+int ends;
+uint16_t data_pcm[256];
 uint16_t a;
 uint16_t b;
 uint16_t c;
+uint16_t d;
+uint16_t e;
 
 
 #define PDM_BUFFER_SIZE 1
@@ -90,6 +95,92 @@ uint16_t PDM_value = 0;
 uint8_t PCM_value = 0;    // For keeping pcm value calculated from pdm_value
 float leaky_PCM_buffer = 0.0;    // Fast Estimation of moving average of PDM
 float leaky_AMP_buffer = 0.0; // Fast Estimation of moving average of abs(PCM)
+
+
+
+
+int n = 256;
+double _Complex vec[MAX];
+double freq = 100;
+double dt = 0.001;
+double vec1[60];
+double vec2[60];
+double vec3[60];
+double vec4[MAX];
+
+
+//#define M_PI 3.1415926535897932384
+//
+int log22(int N)    /*function to calculate the log2(.) of int numbers*/
+{
+  int k = N, i = 0;
+  while(k) {
+    k >>= 1;
+    i++;
+  }
+  return i - 1;
+}
+
+int check(int n)    //checking if the number of element is a power of 2
+{
+  return n > 0 && (n & (n - 1)) == 0;
+}
+
+int reverse(int N, int n)    //calculating revers number
+{
+  int j, p = 0;
+  for(j = 1; j <= (int)log22(N); j++) {
+    if(n & (1 << ((int)log22(N) - j)))
+      p |= 1 << (j - 1);
+  }
+  return p;
+}
+
+void ordina(double _Complex* f1, int N) //using the reverse order in the array
+{
+	double _Complex f2[MAX];
+  for(int i = 0; i < N; i++)
+    f2[i] = f1[reverse(N, i)];
+  for(int j = 0; j < N; j++)
+    f1[j] = f2[j];
+}
+
+double _Complex polar1(double rho, double theta){
+	return rho * cos(theta) + rho * sin(theta)*I;
+}
+
+void transform(double _Complex* f, int N) //
+{
+  ordina(f, N);    //first: reverse order
+  double _Complex *W;
+  W = (double _Complex *)malloc(N / 2 * sizeof(double _Complex));
+  W[1] = polar1(1., -2. * M_PI / N);
+  W[0] = 1;
+  for(int i = 2; i < N / 2; i++)
+    W[i] = cpow(W[1], i);
+  int n = 1;
+  int a = N / 2;
+  for(int j = 0; j < log22(N); j++) {
+    for(int i = 0; i < N; i++) {
+      if(!(i & n)) {
+    	  double _Complex temp = f[i];
+    	  double _Complex Temp = W[(i * a) % (n * a)] * f[i + n];
+        f[i] = temp + Temp;
+        f[i + n] = temp - Temp;
+      }
+    }
+    n *= 2;
+    a = a / 2;
+  }
+  free(W);
+}
+
+void FFT(double _Complex* f, int N, double d)
+{
+  transform(f, N);
+  for(int i = 0; i < N; i++)
+    f[i] *= 0.001; //multiplying by step
+}
 /* USER CODE END 0 */
 
 /**
@@ -142,7 +233,21 @@ int main(void)
   BSP_AUDIO_IN_SetVolume(64);
   toPDM = 0;
   ends = 0;
-  while (1)
+//  for(int i = 0; i < n; i++) {
+//	    vec[i] = 30*sin(2*M_PI*freq*i*dt);
+//  }
+//  FFT(vec,n,d);
+//  for(int j = 0; j < 512; j++)
+//    vec4[j] = cabs(vec[j]);
+//  for(int j = 58; j < 116; j++)
+//    vec2[j%58] = cabs(vec[j]);
+//  for(int j = 116; j < 174; j++)
+//    vec3[j%58] = cabs(vec[j]);
+//  for(int j = 174; j < 512; j++)
+//    vec4[j%58] = cabs(vec[j]);
+//	while (1){}
+
+	while (1)
   {
     /* USER CODE END WHILE */
 
@@ -183,11 +288,34 @@ int main(void)
 	  	if(toPDM){
 	  		toPDM = 0;
 
-	  		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
-	  		ends = 0;
-	  	}
-	  	if(ends<32){
-	  		a = data_pcm[ends];
+	  		BSP_AUDIO_IN_PDMToPCM(data_in, &data_pcm[(a%8)*32]);
+			a++;
+			if(a%8 == 0){
+//				BSP_AUDIO_IN_Pause();
+				for (int i = 0; i<256; i++){
+					vec[i] = data_pcm[i];
+				}
+				FFT(vec, n, 1);
+				b = 0;
+				c = 0;
+				for (int j = 0; j<128; j++){
+					vec4[j] = cabs(vec[j]);
+					if(b < vec4[j]){
+						b = vec4[j];
+						c = j;
+					}
+
+				}
+				if(b > 500){
+					d = b;
+					e = 100;
+				}
+				else{
+					d = b;
+					e = 0;
+				}
+//				BSP_AUDIO_IN_Resume();
+			}
 	  	}
 //	  	result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
 //	  	if (result == HAL_OK) {
@@ -209,7 +337,6 @@ int main(void)
 //
 //	  	    }
 //	  	}
-		ends++;
 
 
   }
@@ -276,8 +403,10 @@ void BSP_AUDIO_IN_HalfTransfer_CallBack(){
 
 }
 void BSP_AUDIO_IN_TransferComplete_CallBack(){
-	BSP_LED_Toggle(LED4);
 	toPDM = 1;
+	ends++;
+	if(ends%100==0)
+		BSP_LED_Toggle(LED6);
 }
 /* USER CODE END 4 */
 
