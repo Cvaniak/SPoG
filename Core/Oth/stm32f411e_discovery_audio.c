@@ -856,8 +856,13 @@ uint8_t BSP_AUDIO_IN_PDMToPCM(uint16_t *PDMBuf, uint16_t *PCMBuf)
   /* Duplicate samples since a single microphone in mounted on STM32F4-Discovery */
   for(index = 0; index < PCM_OUT_SIZE; index++)
   {
+	PCMBuf[index<<1] = PCMBuf[index<<1] + INT16_MAX/2 ;
     PCMBuf[(index<<1)+1] = PCMBuf[index<<1];
   }
+//  for(index = 0; index < PCM_OUT_SIZE*2 - 4; index++)
+//  {
+//	PCMBuf[index] = (PCMBuf[index]+PCMBuf[index+1]+PCMBuf[index+2]+PCMBuf[index+3])/4;
+//  }
 	
   /* Return AUDIO_OK when all operations are correctly done */
   return AUDIO_OK; 
@@ -1096,7 +1101,7 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
 
     /* PDM lib config phase */
     PDM_FilterConfig[index].output_samples_number = AudioFreq/1000;
-    PDM_FilterConfig[index].mic_gain = 24;
+    PDM_FilterConfig[index].mic_gain = 32;
     PDM_FilterConfig[index].decimation_factor = PDM_FILTER_DEC_FACTOR_64;
     PDM_Filter_setConfig((PDM_Filter_Handler_t *)&PDM_FilterHandler[index], &PDM_FilterConfig[index]);
   }

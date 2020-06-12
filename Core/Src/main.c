@@ -72,32 +72,23 @@ void SystemClock_Config(void);
 
 volatile int32_t data_full;
 volatile int16_t data_short;
-volatile uint32_t counter;
 uint16_t data_in[128];
 int ends;
+//int16_t
 uint16_t data_pcm[256];
 uint16_t a;
 uint16_t b;
 uint16_t c;
-uint16_t d;
+uint16_t maxF;
 uint16_t e;
 
-
-#define PDM_BUFFER_SIZE 1
-#define PCM_BUFFER_SIZE 2500
-#define PDM_BLOCK_SIZE_BITS 16
-#define LEAKY_KEEP_RATE 0.95
-
-volatile HAL_StatusTypeDef result;
-uint8_t toPDM;
-uint16_t PDM_buffer[PDM_BUFFER_SIZE]; // Buffer for pdm value from hi2s2 (Mic)
-uint16_t PDM_value = 0;
-uint8_t PCM_value = 0;    // For keeping pcm value calculated from pdm_value
-float leaky_PCM_buffer = 0.0;    // Fast Estimation of moving average of PDM
-float leaky_AMP_buffer = 0.0; // Fast Estimation of moving average of abs(PCM)
-
-
-
+uint8_t funcVar[4] = {5,15,23,30};
+uint8_t howMuch = 3;
+uint8_t counter = 0;
+uint8_t epsilonik = 3;
+uint8_t lastVar = 0;
+uint16_t limi = 1600;
+uint8_t toPDM = 0;
 
 int n = 256;
 double _Complex vec[MAX];
@@ -298,7 +289,7 @@ int main(void)
 				FFT(vec, n, 1);
 				b = 0;
 				c = 0;
-				for (int j = 0; j<128; j++){
+				for (int j = 1; j<128; j++){
 					vec4[j] = cabs(vec[j]);
 					if(b < vec4[j]){
 						b = vec4[j];
@@ -306,16 +297,52 @@ int main(void)
 					}
 
 				}
-				if(b > 500){
-					d = b;
-					e = 100;
+				if(b > limi){
+					maxF = b;
+					e = c;
 				}
 				else{
-					d = b;
-					e = 0;
+					maxF = b;
+					e = 1000;
 				}
 //				BSP_AUDIO_IN_Resume();
+				for(int k=0; k<4; k++){
+					if(e+epsilonik>funcVar[k] && e-epsilonik<funcVar[k] && e!=1000){
+						if(k == lastVar){
+							counter++;
+						}
+						else{
+							counter = 0;
+							lastVar = k;
+						}
+						if(counter == howMuch)
+							switch(k){
+							case 0:
+								BSP_LED_On(LED3);
+								HAL_Delay(1000);
+								BSP_LED_Off(LED3);
+								break;
+							case 1:
+								BSP_LED_On(LED4);
+								HAL_Delay(1000);
+								BSP_LED_Off(LED4);
+								break;
+							case 2:
+								BSP_LED_On(LED5);
+								HAL_Delay(1000);
+								BSP_LED_Off(LED5);
+								break;
+							case 3:
+								BSP_LED_On(LED6);
+								HAL_Delay(1000);
+								BSP_LED_Off(LED6);
+								break;
+							}
+					}
+				}
+
 			}
+
 	  	}
 //	  	result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
 //	  	if (result == HAL_OK) {
@@ -398,15 +425,15 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 void BSP_AUDIO_IN_HalfTransfer_CallBack(){
-	BSP_LED_Toggle(LED3);
+//	BSP_LED_Toggle(LED3);
 
 
 }
 void BSP_AUDIO_IN_TransferComplete_CallBack(){
 	toPDM = 1;
 	ends++;
-	if(ends%100==0)
-		BSP_LED_Toggle(LED6);
+//	if(ends%100==0)
+//		BSP_LED_Toggle(LED6);
 }
 /* USER CODE END 4 */
 
