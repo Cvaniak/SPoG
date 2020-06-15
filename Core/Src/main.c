@@ -82,12 +82,12 @@ uint16_t c;
 uint16_t maxF;
 uint16_t e;
 
-uint8_t funcVar[4] = {5,15,23,30};
-uint8_t howMuch = 3;
+uint8_t funcVar[4] = {3,7,11,15};
+uint8_t howMuch = 2;
 uint8_t counter = 0;
-uint8_t epsilonik = 3;
+uint8_t epsilonik = 2;
 uint8_t lastVar = 0;
-uint16_t limi = 1600;
+uint16_t limi = 550;
 uint8_t toPDM = 0;
 
 int n = 256;
@@ -100,9 +100,9 @@ double vec3[60];
 double vec4[MAX];
 
 
-//#define M_PI 3.1415926535897932384
 //
-int log22(int N)    /*function to calculate the log2(.) of int numbers*/
+// FFT based on code from https://it.wikipedia.org/wiki/Trasformata_di_Fourier_veloce
+int log22(int N)
 {
   int k = N, i = 0;
   while(k) {
@@ -112,12 +112,7 @@ int log22(int N)    /*function to calculate the log2(.) of int numbers*/
   return i - 1;
 }
 
-int check(int n)    //checking if the number of element is a power of 2
-{
-  return n > 0 && (n & (n - 1)) == 0;
-}
-
-int reverse(int N, int n)    //calculating revers number
+int reverse(int N, int n) \
 {
   int j, p = 0;
   for(j = 1; j <= (int)log22(N); j++) {
@@ -127,7 +122,7 @@ int reverse(int N, int n)    //calculating revers number
   return p;
 }
 
-void ordina(double _Complex* f1, int N) //using the reverse order in the array
+void ordina(double _Complex* f1, int N)
 {
 	double _Complex f2[MAX];
   for(int i = 0; i < N; i++)
@@ -140,9 +135,9 @@ double _Complex polar1(double rho, double theta){
 	return rho * cos(theta) + rho * sin(theta)*I;
 }
 
-void transform(double _Complex* f, int N) //
+void transform(double _Complex* f, int N)
 {
-  ordina(f, N);    //first: reverse order
+  ordina(f, N);
   double _Complex *W;
   W = (double _Complex *)malloc(N / 2 * sizeof(double _Complex));
   W[1] = polar1(1., -2. * M_PI / N);
@@ -170,8 +165,9 @@ void FFT(double _Complex* f, int N, double d)
 {
   transform(f, N);
   for(int i = 0; i < N; i++)
-    f[i] *= 0.001; //multiplying by step
+    f[i] *= 0.001;
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -180,109 +176,62 @@ void FFT(double _Complex* f, int N, double d)
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-  /* USER CODE END 1 */
+	/* USER CODE BEGIN 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_I2S2_Init();
-  MX_I2C1_Init();
-  MX_SPI1_Init();
-  MX_TIM3_Init();
-  MX_USART2_UART_Init();
-  /* USER CODE BEGIN 2 */
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_DMA_Init();
+	MX_I2S2_Init();
+	MX_I2C1_Init();
+	MX_SPI1_Init();
+	MX_TIM3_Init();
+	MX_USART2_UART_Init();
+	/* USER CODE BEGIN 2 */
 
-  /* USER CODE END 2 */
+	/* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  BSP_LED_Off(LED3);
-  BSP_LED_Off(LED4);
-  BSP_LED_Off(LED5);
-  BSP_LED_Off(LED6);
-  HAL_Delay(2000);
-  BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
+	BSP_LED_Off(LED3);
+	BSP_LED_Off(LED4);
+	BSP_LED_Off(LED5);
+	BSP_LED_Off(LED6);
+	HAL_Delay(2000);
+	BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
 
-  BSP_AUDIO_IN_Record(data_in, INTERNAL_BUFF_SIZE/2);
-  BSP_AUDIO_IN_SetVolume(64);
-  toPDM = 0;
-  ends = 0;
-//  for(int i = 0; i < n; i++) {
-//	    vec[i] = 30*sin(2*M_PI*freq*i*dt);
-//  }
-//  FFT(vec,n,d);
-//  for(int j = 0; j < 512; j++)
-//    vec4[j] = cabs(vec[j]);
-//  for(int j = 58; j < 116; j++)
-//    vec2[j%58] = cabs(vec[j]);
-//  for(int j = 116; j < 174; j++)
-//    vec3[j%58] = cabs(vec[j]);
-//  for(int j = 174; j < 512; j++)
-//    vec4[j%58] = cabs(vec[j]);
-//	while (1){}
+	BSP_AUDIO_IN_Record(data_in, INTERNAL_BUFF_SIZE/2);
+	BSP_AUDIO_IN_SetVolume(64);
+	toPDM = 0;
+	ends = 0;
 
 	while (1)
-  {
-    /* USER CODE END WHILE */
+	{
+	/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-//	result = HAL_I2S_Receive(&hi2s2, PDM_buffer, PDM_BUFFER_SIZE, 1000);
-//	if (result == HAL_OK) {
-////		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
-////		data_short = (int16_t) data_in[0];
-////		counter = 10;
-//////		while(counter -- );
-////		  uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
-////		  uint32_t index = 0;
-//
-//		  /* PDM Demux */
-//		for (i = 0; i < PDM_BUFFER_SIZE; i++) {
-//			PCM_value = -PDM_BLOCK_SIZE_BITS / 2;
-//			PDM_value = PDM_buffer[i];
-//			// calculate PCM value
-//			while (PDM_value != 0)    // while pdm_value still have 1s in binary
-//			{
-//				PCM_value++;
-//				PDM_value ^= PDM_value & -PDM_value; // remove left most 1 in binary
-//			}
-//			leaky_PCM_buffer += PCM_value;
-//			leaky_PCM_buffer *= LEAKY_KEEP_RATE;
-//			leaky_AMP_buffer += absFloat(leaky_PCM_buffer);
-//			leaky_AMP_buffer *= LEAKY_KEEP_RATE;
-//		}
-//
-//		if(data_full>=200000){
-//	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
-//	    }
-//	    else{
-//	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
-//
-//	    }
-//	}
-	  	if(toPDM){
-	  		toPDM = 0;
+	/* USER CODE BEGIN 3 */
+		if(toPDM){
+			toPDM = 0;
 
-	  		BSP_AUDIO_IN_PDMToPCM(data_in, &data_pcm[(a%8)*32]);
+			BSP_AUDIO_IN_PDMToPCM(data_in, &data_pcm[(a%8)*32]);
 			a++;
 			if(a%8 == 0){
-//				BSP_AUDIO_IN_Pause();
 				for (int i = 0; i<256; i++){
 					vec[i] = data_pcm[i];
 				}
@@ -295,8 +244,8 @@ int main(void)
 						b = vec4[j];
 						c = j;
 					}
-
 				}
+
 				if(b > limi){
 					maxF = b;
 					e = c;
@@ -305,9 +254,9 @@ int main(void)
 					maxF = b;
 					e = 1000;
 				}
-//				BSP_AUDIO_IN_Resume();
+
 				for(int k=0; k<4; k++){
-					if(e+epsilonik>funcVar[k] && e-epsilonik<funcVar[k] && e!=1000){
+					if(e+epsilonik>=funcVar[k] && e-epsilonik<=funcVar[k] && e!=1000){
 						if(k == lastVar){
 							counter++;
 						}
@@ -315,7 +264,7 @@ int main(void)
 							counter = 0;
 							lastVar = k;
 						}
-						if(counter == howMuch)
+						if(counter == howMuch){
 							switch(k){
 							case 0:
 								BSP_LED_On(LED3);
@@ -338,35 +287,12 @@ int main(void)
 								BSP_LED_Off(LED6);
 								break;
 							}
+						}
 					}
 				}
-
 			}
-
-	  	}
-//	  	result = HAL_I2S_Receive(&hi2s2, data_in, 2, 100);
-//	  	if (result == HAL_OK) {
-//	  //		int32_t data_full = (int32_t) data_in[0] << 16 | data_in[1];
-//	  //		data_short = (int16_t) data_in[0];
-//	  //		counter = 10;
-//	  ////		while(counter -- );
-//	  //		  uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
-//	  //		  uint32_t index = 0;
-//
-//	  		  /* PDM Demux */
-//	  		BSP_AUDIO_IN_PDMToPCM(data_in, data_pcm);
-//
-//	  		if(data_full>=200000){
-//	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
-//	  	    }
-//	  	    else{
-//	  	    	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
-//
-//	  	    }
-//	  	}
-
-
-  }
+		}
+	}
   /* USER CODE END 3 */
 }
 
@@ -426,8 +352,6 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void BSP_AUDIO_IN_HalfTransfer_CallBack(){
 //	BSP_LED_Toggle(LED3);
-
-
 }
 void BSP_AUDIO_IN_TransferComplete_CallBack(){
 	toPDM = 1;
